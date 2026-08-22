@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Tutor{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h1>Talk to A.P.E.X.</h1>
+  <p class="lede">Ask about anything you're studying — explanations, mnemonics, or a walkthrough of a wrong quiz answer.</p>
+
+  <div class="chat-log" id="chat-log">
+    <div class="empty-state" id="chat-empty">No messages yet — say hello.</div>
+  </div>
+
+  <div class="chat-input-row">
+    <textarea id="chat-input" rows="1" placeholder="Ask A.P.E.X. something…"></textarea>
+    <button class="btn primary" id="send-btn">Send</button>
+  </div>
+  <div class="btn-row" style="margin-top:10px;">
+    <button class="btn ghost" id="reset-btn">Reset conversation</button>
+    <span class="status" id="chat-status"><span class="dot"></span><span id="chat-status-text">Ready</span></span>
+  </div>
+  <div id="chat-error"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+{% endblock %}

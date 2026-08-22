@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h1>Chat History</h1>
+  <p class="lede">Every conversation with the tutor, grouped by day.</p>
+
+  {% if ordered_dates %}
+    {% for date in ordered_dates %}
+      <div class="history-date">{{ date }}</div>
+      <div class="chat-log" style="max-height:none;">
+        {% for m in sessions[date] %}
+          <div class="bubble {{ 'user' if m.role == 'You' else 'ai' }}">
+            {% if m.role != 'You' %}<span class="role">{{ m.role }} · {{ m.timestamp }}</span>{% endif %}
+            {{ m.message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No chat history yet — start a conversation on the Tutor page.</div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,17 @@
+flask
+gunicorn
+python-dotenv
+
+# LLM API (chat tutor + summarization)
+groq
+
+# Database
+pymongo
+dnspython      # required by pymongo for mongodb+srv:// Atlas URIs
+
+# NLP (rule-based quiz generation — unchanged from the original app)
+spacy
+
+# Document import
+pymupdf
+python-docx

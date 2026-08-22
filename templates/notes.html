@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Notes{% endblock %}
+
+{% block content %}
+
+<section class="panel">
+  <h1>Compress your notes</h1>
+  <p class="lede">Paste raw study material or upload a file. A.P.E.X. distills it into a summary, then turns that into a quiz you can take right here.</p>
+
+  <div class="field">
+    <label for="title-input">Topic title</label>
+    <input type="text" id="title-input" placeholder="e.g. Boolean Algebra — Chapter 4">
+  </div>
+
+  <div class="field">
+    <label for="notes-input">Your notes</label>
+    <textarea id="notes-input" rows="10" placeholder="Paste your notes here, or upload a .pdf / .docx / .txt file below…"></textarea>
+    <div class="hint" id="word-count">0 words</div>
+  </div>
+
+  <div class="field">
+    <label for="file-input">Or import a file</label>
+    <input type="file" id="file-input" accept=".pdf,.docx,.txt">
+  </div>
+
+  <div class="field">
+    <label for="length-select">Summary length</label>
+    <select id="length-select">
+      <option value="80">Brief</option>
+      <option value="150" selected>Normal</option>
+      <option value="300">Detailed</option>
+    </select>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn primary" id="summarize-btn">Summarize</button>
+    <span class="status" id="notes-status"><span class="dot"></span><span id="notes-status-text">Ready</span></span>
+  </div>
+
+  <div id="notes-error"></div>
+</section>
+
+<section class="panel" id="summary-panel" style="display:none;">
+  <h2>Summary</h2>
+  <p id="summary-text" style="color:var(--text-dim); line-height:1.7; font-size:14px;"></p>
+
+  <div class="field" style="margin-top:18px;">
+    <label for="qcount-select">Number of quiz questions</label>
+    <select id="qcount-select">
+      <option value="5">Brief (5)</option>
+      <option value="10" selected>Normal (10)</option>
+      <option value="20">Detailed (20)</option>
+    </select>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn primary" id="quiz-btn">Generate Quiz</button>
+    <span class="status" id="quiz-status"><span class="dot"></span><span id="quiz-status-text">—</span></span>
+  </div>
+</section>
+
+<section class="panel" id="quiz-panel" style="display:none;">
+  <h2>Quiz</h2>
+  <p class="lede">Pick an answer for each question — you'll get instant feedback.</p>
+  <div id="quiz-cards"></div>
+  <div class="btn-row">
+    <button class="btn primary" id="submit-quiz-btn" style="display:none;">Save Attempt to Progress</button>
+  </div>
+  <div id="quiz-result"></div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/notes.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Progress{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h1>Progress Dashboard</h1>
+  <p class="lede">Every quiz you save shows up here.</p>
+
+  <div class="stat-grid">
+    <div class="stat-box panel">
+      <div class="num">{{ stats.total_quizzes }}</div>
+      <div class="label">Quizzes Taken</div>
+    </div>
+    <div class="stat-box panel">
+      <div class="num">{{ stats.avg_score_pct }}%</div>
+      <div class="label">Average Score</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Topic Mastery</h2>
+  {% if topics %}
+    {% for t in topics %}
+      <div class="mastery-row">
+        <div class="mastery-title" title="{{ t.title }}">{{ t.title }}</div>
+        <div class="mastery-bar-track"><div class="mastery-bar-fill" style="width: {{ t.score_pct }}%;"></div></div>
+        <div class="mastery-pct">{{ t.score_pct }}%</div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No quiz attempts saved yet — take a quiz from the Notes page.</div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Weak Areas</h2>
+  <p class="lede">Your most recent incorrect answers, across every topic.</p>
+  {% if weak_areas %}
+    {% for w in weak_areas %}
+      <div class="weak-item">
+        <div class="q">{{ w.question }}</div>
+        <div class="a">
+          Correct: <span class="correct">{{ w.correct_answer }}</span>
+          &nbsp;·&nbsp; You answered: <span class="wrong">{{ w.user_answer }}</span>
+          &nbsp;·&nbsp; <span style="color:var(--text-faint);">{{ w.title }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No mistakes on record — nicely done, or no quizzes taken yet.</div>
+  {% endif %}
+</section>
+{% endblock %}
