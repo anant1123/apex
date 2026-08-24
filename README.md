@@ -9,7 +9,7 @@ Flask web app (Groq API, MongoDB).
 | Original | Web version | Why |
 |---|---|---|
 | `GUI.py` + `SplashScreen.py` + `MacTitleBar.py` (CustomTkinter) | `templates/*.html` + `static/` (Flask + vanilla JS) | Tkinter renders to a native OS window, not a browser — it cannot be hosted on Render/Streamlit as-is. |
-| Local Qwen2.5-0.5B-Instruct (`ChatEngine.py`, ~1GB+ RAM) | Groq API, `qwen/qwen3-32b` (`services/chat_engine.py`) | No GPU/RAM to host a local model on a free web dyno — a hosted LLM API does the job, and is actually a stronger model. |
+| Local Qwen2.5-0.5B-Instruct (`ChatEngine.py`, ~1GB+ RAM) | Groq API, `openai/gpt-oss-20b` (`services/chat_engine.py`) | No GPU/RAM to host a local model on a free web dyno — a hosted LLM API does the job, and is actually a stronger model. |
 | Local distilBART-CNN (`Summarizer.py`) | Same Groq model via a summarization prompt (`services/summarizer.py`) | One API instead of two separate models — simpler to host, no meaningful quality loss for study notes. |
 | `ModelManager.py` (RAM/GPU orchestration) | *(removed)* | Only needed for juggling local models in limited RAM — irrelevant once inference is remote. |
 | `UpdateEngine.py` (GitHub self-updater) | *(removed)* | Self-updating `.exe` installers don't apply to a web app — you just redeploy. |
@@ -45,7 +45,7 @@ static/js/                  notes.js, chat.js — frontend interactivity
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
+python -m spacy download en_core_web_md
 
 cp .env.example .env   # then fill in GROQ_API_KEY and MONGO_URI
 python app.py          # http://localhost:5000
@@ -60,15 +60,24 @@ python app.py          # http://localhost:5000
 
 1. Push this folder to a GitHub repo.
 2. Render → **New → Blueprint** → point at the repo (it will read `render.yaml` automatically), **or** New → Web Service manually with:
-   - Build command: `pip install -r requirements.txt && python -m spacy download en_core_web_sm`
+   - Build command: `pip install -r requirements.txt && python -m spacy download en_core_web_md`
    - Start command: `gunicorn app:app --bind 0.0.0.0:$PORT`
 3. Under **Environment**, set `GROQ_API_KEY` and `MONGO_URI` (these are marked `sync: false` in `render.yaml` on purpose — secrets aren't committed to git).
 4. Deploy. Visit `/healthz` to confirm it's up.
 
 ## A note on the Groq model name
 
-`qwen/qwen3-32b` is current as of this writing. If it ever fails with a
-"model decommissioned" error, check the live list at
+Groq deprecates models with roughly a month's notice — `qwen/qwen3-32b`
+(what this project used originally) was retired on June 17, 2026, which is
+why it's now on `openai/gpt-oss-20b` instead. If you ever hit a 404 "model
+does not exist" error, check the live list at
 [console.groq.com/docs/models](https://console.groq.com/docs/models) and
 update `GROQ_CHAT_MODEL` / `GROQ_SUMMARY_MODEL` in your env vars — no code
 change needed.
+
+Avoid `groq/compound` / `groq/compound-mini` for this app specifically —
+they're agentic systems that internally call larger models (and burn
+through the free tier's tokens-per-minute budget much faster) rather than
+plain chat models. `openai/gpt-oss-20b` (or `openai/gpt-oss-120b` for
+better reasoning, at the cost of a lower free rate limit) are the right
+category of model here.

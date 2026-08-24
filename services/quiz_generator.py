@@ -13,13 +13,16 @@ import re
 import random
 import spacy
 
+# en_core_web_md instead of the smaller _sm model: it ships with real word
+# vectors (~20k), which noticeably improves entity/keyword detection on
+# less common academic terms — worth the extra ~30MB download on Render.
 try:
-    nlp = spacy.load("en_core_web_sm")
+    nlp = spacy.load("en_core_web_md")
 except OSError:
     # Model not downloaded yet — see requirements.txt / build step, which
-    # runs: python -m spacy download en_core_web_sm
-    print("[quiz_generator] en_core_web_sm not found — falling back to a blank "
-          "pipeline. Run: python -m spacy download en_core_web_sm")
+    # runs: python -m spacy download en_core_web_md
+    print("[quiz_generator] en_core_web_md not found — falling back to a blank "
+          "pipeline. Run: python -m spacy download en_core_web_md")
     nlp = spacy.blank("en")
 
 # --- Filler / stop words — never used as an answer ---

@@ -26,9 +26,11 @@ def _require(name: str, default: str = "") -> str:
 GROQ_API_KEY = _require("GROQ_API_KEY")
 
 # Official current model IDs — verify at https://console.groq.com/docs/models
-# if either of these ever 400s with a "model decommissioned" error.
-GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "qwen/qwen3-32b")
-GROQ_SUMMARY_MODEL = os.environ.get("GROQ_SUMMARY_MODEL", "qwen/qwen3-32b")
+# if either of these ever 404s with a "model does not exist" error (Groq
+# deprecates models with ~1 month notice — qwen/qwen3-32b was retired
+# June 17, 2026, which is why this isn't set to that anymore).
+GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "openai/gpt-oss-20b")
+GROQ_SUMMARY_MODEL = os.environ.get("GROQ_SUMMARY_MODEL", "openai/gpt-oss-20b")
 
 # --- MongoDB ---
 MONGO_URI = _require("MONGO_URI", "mongodb://localhost:27017")
