@@ -18,3 +18,6 @@ python-docx
 
 # Lightweight web search for the AI tutor (no API key needed)
 ddgs
+
+# OTP login emails via Resend's HTTP API (Render's free tier blocks SMTP ports)
+requests

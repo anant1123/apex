@@ -41,17 +41,17 @@ SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me-in-productio
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "10"))
 SESSION_LIFETIME_DAYS = int(os.environ.get("SESSION_LIFETIME_DAYS", "30"))
 
-# --- Email OTP login (SMTP) ---
-# Gmail: use smtp.gmail.com:587 with a 16-character App Password (not your
-# normal password) — needs 2-Step Verification turned on first, then
-# generate one at myaccount.google.com/apppasswords. Any other SMTP
-# provider (Brevo, Resend's SMTP endpoint, your college's mail server) works
-# the same way, just change these four values.
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "A.P.E.X.")
+# --- Email OTP login (Resend HTTP API — NOT SMTP) ---
+# Render's free tier blocks outbound SMTP ports, so this app sends OTP
+# emails over Resend's REST API (plain HTTPS, never blocked) instead of
+# smtplib. Free tier: 100 emails/day, 3,000/month, no credit card.
+# NOTE: until a domain is verified at resend.com/domains, RESEND_FROM_EMAIL
+# stays "onboarding@resend.dev" and Resend will only actually deliver to
+# the email your Resend account itself was signed up with — see the
+# warning in services/email_sender.py.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+RESEND_FROM_NAME = os.environ.get("RESEND_FROM_NAME", "A.P.E.X.")
 OTP_EXPIRY_MINUTES = int(os.environ.get("OTP_EXPIRY_MINUTES", "10"))
 OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", "5"))
 

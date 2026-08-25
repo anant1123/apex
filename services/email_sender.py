@@ -1,31 +1,37 @@
 """
-services/email_sender.py — Sends the OTP login code via SMTP.
+services/email_sender.py — Sends the OTP login code via Resend's HTTP API.
 
-Plain smtplib (stdlib) — no new dependency. Works with Gmail (App
-Password), Brevo, Resend's SMTP endpoint, or any other SMTP provider by
-just changing the SMTP_* env vars in config.py.
+NOT SMTP. Render's free web services block outbound SMTP ports (25, 465,
+587) as of Sept 2025 — see https://render.com/changelog — so smtplib
+connections just time out there ("upgrade to a paid plan" is Render's own
+message for this, not this app's). Resend's REST API sends over plain
+HTTPS instead, which is never blocked, and its free tier (100 emails/day,
+3,000/month, no credit card) works both locally and on Render.
+
+IMPORTANT LIMITATION: until you verify your own domain at
+resend.com/domains, Resend only lets you send FROM their sandbox address
+(onboarding@resend.dev) TO the single email address your Resend account
+itself is registered with — every other recipient gets silently rejected.
+That's fine for logging in as yourself while building/testing, but if you
+need classmates/graders to log in with THEIR OWN emails, you'll need to
+verify a domain (requires owning one) — or switch this file to Brevo
+instead, which only requires verifying a sender email (no domain purchase)
+and can email any recipient right away.
 """
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
+import requests
 import config
+
+RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 
 def send_otp_email(to_email, code):
     """Returns True on success, False on failure (caller decides how to react —
     see app.py, which shows the user a friendly error instead of crashing)."""
-    if not config.SMTP_USER or not config.SMTP_PASSWORD:
-        print("[email_sender] SMTP_USER/SMTP_PASSWORD not set — cannot send OTP email.")
+    if not config.RESEND_API_KEY or not config.RESEND_FROM_EMAIL:
+        print("[email_sender] RESEND_API_KEY/RESEND_FROM_EMAIL not set — cannot send OTP email.")
         return False
 
-    subject = f"{code} is your A.P.E.X. login code"
-    text_body = (
-        f"Your A.P.E.X. login code is: {code}\n\n"
-        f"This code expires in {config.OTP_EXPIRY_MINUTES} minutes.\n"
-        f"If you didn't request this, you can safely ignore this email."
-    )
     html_body = f"""\
 <div style="font-family:Arial,sans-serif;background:#0b0b13;padding:32px;color:#eef0f6;">
   <div style="max-width:420px;margin:0 auto;background:rgba(255,255,255,0.04);
@@ -41,21 +47,30 @@ def send_otp_email(to_email, code):
   </div>
 </div>
 """
+    text_body = (
+        f"Your A.P.E.X. login code is: {code}\n\n"
+        f"This code expires in {config.OTP_EXPIRY_MINUTES} minutes.\n"
+        f"If you didn't request this, you can safely ignore this email."
+    )
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{config.SMTP_FROM_NAME} <{config.SMTP_USER}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(text_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
+    payload = {
+        "from": f"{config.RESEND_FROM_NAME} <{config.RESEND_FROM_EMAIL}>",
+        "to": [to_email],
+        "subject": f"{code} is your A.P.E.X. login code",
+        "html": html_body,
+        "text": text_body,
+    }
+    headers = {
+        "Authorization": f"Bearer {config.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+    }
 
     try:
-        with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(config.SMTP_USER, config.SMTP_PASSWORD)
-            # server.sendmail(config.SMTP_USER, [to_email], msg.as_string())
-            server.send_message(msg)
-        return True
+        resp = requests.post(RESEND_ENDPOINT, json=payload, headers=headers, timeout=10)
+        if resp.status_code in (200, 201):
+            return True
+        print(f"[email_sender] Resend API error {resp.status_code}: {resp.text}")
+        return False
     except Exception as e:
         print(f"[email_sender] Failed to send OTP email: {e}")
         return False
