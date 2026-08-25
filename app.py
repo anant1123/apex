@@ -413,4 +413,4 @@ def api_conversation_delete(conversation_id):
 
 if __name__ == "__main__":
     # Local dev only — Render runs this via gunicorn (see Procfile), not this block.
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

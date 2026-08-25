@@ -53,7 +53,8 @@ def send_otp_email(to_email, code):
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as server:
             server.starttls()
             server.login(config.SMTP_USER, config.SMTP_PASSWORD)
-            server.sendmail(config.SMTP_USER, [to_email], msg.as_string())
+            # server.sendmail(config.SMTP_USER, [to_email], msg.as_string())
+            server.send_message(msg)
         return True
     except Exception as e:
         print(f"[email_sender] Failed to send OTP email: {e}")
