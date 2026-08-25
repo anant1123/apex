@@ -39,6 +39,7 @@ MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME", "apex_db")
 # --- Flask ---
 SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me-in-production")
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "10"))
+SESSION_LIFETIME_DAYS = int(os.environ.get("SESSION_LIFETIME_DAYS", "30"))
 
 # --- App behaviour ---
 MAX_CHAT_HISTORY_TURNS = 12   # how many past turns are sent back to Groq for context

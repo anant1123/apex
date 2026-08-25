@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="profile-header">
+    <span class="avatar-big">{{ (user.avatar_url and '') or user.name[0]|upper }}</span>
+    <div>
+      <h1>{{ user.name }}</h1>
+      <p class="lede" style="margin:0;">{{ user.email }}</p>
+    </div>
+  </div>
+
+  <div class="stat-grid" style="margin-top:20px;">
+    <div class="stat-box panel">
+      <div class="num">{{ stats.total_notes }}</div>
+      <div class="label">Notes Saved</div>
+    </div>
+    <div class="stat-box panel">
+      <div class="num">{{ stats.total_quizzes }}</div>
+      <div class="label">Quizzes Taken</div>
+    </div>
+    <div class="stat-box panel">
+      <div class="num">{{ stats.avg_score_pct }}%</div>
+      <div class="label">Average Score</div>
+    </div>
+  </div>
+</section>
+
+{% if info %}<div class="panel"><div class="hint" style="color:var(--green);">{{ info }}</div></div>{% endif %}
+{% if error %}<div class="panel"><div class="error-box">{{ error }}</div></div>{% endif %}
+
+<section class="panel">
+  <h2>Edit profile</h2>
+  <form method="post">
+    <input type="hidden" name="action" value="update_profile">
+    <div class="field">
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="{{ user.name }}" required>
+    </div>
+    <div class="field">
+      <label for="avatar_url">Avatar image URL <span style="text-transform:none; font-weight:400;">(optional)</span></label>
+      <input type="text" id="avatar_url" name="avatar_url" value="{{ user.avatar_url or '' }}" placeholder="https://…">
+    </div>
+    <div class="btn-row">
+      <button type="submit" class="btn primary">Save changes</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Change password</h2>
+  <form method="post">
+    <input type="hidden" name="action" value="change_password">
+    <div class="field">
+      <label for="current_password">Current password</label>
+      <input type="password" id="current_password" name="current_password" required>
+    </div>
+    <div class="field">
+      <label for="new_password">New password</label>
+      <input type="password" id="new_password" name="new_password" required minlength="6">
+    </div>
+    <div class="field">
+      <label for="confirm_new_password">Confirm new password</label>
+      <input type="password" id="confirm_new_password" name="confirm_new_password" required minlength="6">
+    </div>
+    <div class="btn-row">
+      <button type="submit" class="btn primary">Update password</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

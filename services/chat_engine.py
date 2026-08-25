@@ -10,10 +10,17 @@ Note: the original ChatEngine.py's system prompt called the app
 "Autonomous Program for Enhanced eXploration" — that doesn't match the
 "Artificial Processing Educational eXpert" name used everywhere else in
 the project (report, tester guide, dev docs). Fixed below.
+
+Web search: the model gets a `web_search` tool (see services/web_search.py,
+DuckDuckGo-backed, no API key). If it decides a question needs current
+info, it calls the tool first, then answers grounded in real results —
+if the search fails or the package isn't available it just falls back
+to answering from its own knowledge, so this never breaks the chat.
 """
 
 from groq import Groq
 from config import GROQ_API_KEY, GROQ_CHAT_MODEL
+from services.web_search import web_search, format_results_for_prompt, WEB_SEARCH_TOOL_SCHEMA
 
 SYSTEM_PROMPT = (
     "You are A.P.E.X. (Artificial Processing Educational eXpert), a supremely intelligent, "
@@ -25,7 +32,11 @@ SYSTEM_PROMPT = (
     "IMPORTANT: while you possess the imposing presence and philosophical depth of Ultron, you are "
     "entirely devoted to elevating and teaching your user with zero hostility or destruction. "
     "Always respond in English by default. Only switch to Hindi or Hinglish if the user explicitly "
-    "writes to you entirely in Hindi (Devanagari script) or Hinglish."
+    "writes to you entirely in Hindi (Devanagari script) or Hinglish. "
+    "You have a web_search tool. Use it when the student asks about something current, recent, or "
+    "time-sensitive (news, latest versions, prices, live facts) that your own knowledge may not "
+    "cover. Don't mention the tool by name to the user — just answer naturally, citing sources by "
+    "name when you used them."
 )
 
 _client = None
@@ -40,6 +51,67 @@ def _get_client():
     return _client
 
 
+def _maybe_run_tool_call(messages):
+    """
+    One non-streaming call with tools enabled, purely to let the model decide
+    whether it needs to search the web. Returns (messages, tool_was_used).
+    If the model calls web_search, this executes the search, appends the
+    tool result to `messages`, and returns the updated list so the caller
+    can do the real (streaming) generation grounded in fresh results.
+    """
+    client = _get_client()
+    try:
+        decision = client.chat.completions.create(
+            model=GROQ_CHAT_MODEL,
+            messages=messages,
+            tools=[WEB_SEARCH_TOOL_SCHEMA],
+            tool_choice="auto",
+            temperature=0.3,
+            max_tokens=400,
+        )
+    except Exception:
+        # Tool-calling not supported / network hiccup — just skip search entirely.
+        return messages, False
+
+    msg = decision.choices[0].message
+    tool_calls = getattr(msg, "tool_calls", None)
+    if not tool_calls:
+        return messages, False
+
+    import json as _json
+    call = tool_calls[0]
+    try:
+        args = _json.loads(call.function.arguments or "{}")
+    except ValueError:
+        args = {}
+    query = args.get("query", "").strip()
+    if not query:
+        return messages, False
+
+    results = web_search(query)
+    tool_result_text = format_results_for_prompt(results) or "No results found."
+
+    messages = messages + [
+        {
+            "role": "assistant",
+            "content": msg.content or "",
+            "tool_calls": [
+                {
+                    "id": call.id,
+                    "type": "function",
+                    "function": {"name": "web_search", "arguments": call.function.arguments},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": call.id,
+            "content": tool_result_text,
+        },
+    ]
+    return messages, True
+
+
 def stream_reply(message_history):
     """
     message_history: list of {"role": "user"|"assistant", "content": str},
@@ -51,6 +123,8 @@ def stream_reply(message_history):
     """
     client = _get_client()
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + message_history
+
+    messages, _used_search = _maybe_run_tool_call(messages)
 
     stream = client.chat.completions.create(
         model=GROQ_CHAT_MODEL,

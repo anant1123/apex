@@ -27,6 +27,18 @@
     <a href="{{ url_for('progress_page') }}" class="{{ 'active' if active == 'progress' }}">Progress</a>
     <a href="{{ url_for('history_page') }}" class="{{ 'active' if active == 'history' }}">History</a>
   </nav>
+
+  {% if session.get('user_id') %}
+  <div class="user-menu">
+    <a href="{{ url_for('profile_page') }}" class="user-chip {{ 'active' if active == 'profile' }}">
+      <span class="avatar-dot">{{ session.get('user_name', '?')[0]|upper }}</span>
+      <span class="user-chip-name">{{ session.get('user_name', 'Account') }}</span>
+    </a>
+    <form action="{{ url_for('logout') }}" method="post">
+      <button type="submit" class="btn ghost logout-btn">Logout</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 
 <main class="shell">

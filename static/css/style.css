@@ -338,3 +338,87 @@ textarea:focus-visible, select:focus-visible {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+/* ── Auth (login / register) ─────────────────────────────────────────── */
+
+.auth-panel { max-width: 420px; margin: 40px auto 0; }
+.auth-switch { text-align: center; margin-top: 16px; }
+.auth-switch a { color: var(--accent-3); font-weight: 600; }
+
+/* ── Navbar user menu ─────────────────────────────────────────────────── */
+
+.user-menu { display: flex; align-items: center; gap: 10px; }
+
+.user-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  transition: color .15s ease, border-color .15s ease;
+}
+.user-chip:hover, .user-chip.active { color: var(--text); border-color: var(--border-accent); }
+
+.avatar-dot {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent-3), var(--accent-2));
+  color: #06070b; font-family: var(--font-display); font-weight: 700; font-size: 12px;
+}
+
+.logout-btn { padding: 8px 16px; font-size: 13px; }
+
+@media (max-width: 720px) {
+  .user-menu { justify-content: space-between; }
+  .user-chip-name { display: none; }
+}
+
+/* ── Profile page ─────────────────────────────────────────────────────── */
+
+.profile-header { display: flex; align-items: center; gap: 18px; }
+.avatar-big {
+  width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent-3), var(--accent-2));
+  color: #06070b; font-family: var(--font-display); font-weight: 700; font-size: 26px;
+}
+
+/* ── File upload row (Notes page) ────────────────────────────────────── */
+
+.file-input-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.file-input-row input[type="file"] { flex: 1; min-width: 200px; padding: 9px 12px; }
+
+/* ── Chat header (New chat button) ───────────────────────────────────── */
+
+.chat-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+
+/* ── History — conversation list ─────────────────────────────────────── */
+
+.convo-list { display: flex; flex-direction: column; gap: 10px; }
+
+.convo-row {
+  display: flex; align-items: stretch; gap: 8px;
+}
+
+.convo-link {
+  flex: 1;
+  display: block;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.02);
+  transition: border-color .15s ease, background .15s ease;
+}
+.convo-link:hover { border-color: var(--border-accent); background: rgba(59,130,246,0.06); }
+
+.convo-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.convo-preview { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.convo-meta { font-size: 11.5px; color: var(--text-faint); }
+
+.convo-delete-btn {
+  flex-shrink: 0; width: 42px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-faint);
+}
+.convo-delete-btn:hover { color: var(--red); border-color: var(--red); }

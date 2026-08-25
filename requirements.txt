@@ -15,3 +15,6 @@ spacy
 # Document import
 pymupdf
 python-docx
+
+# Lightweight web search for the AI tutor (no API key needed)
+ddgs

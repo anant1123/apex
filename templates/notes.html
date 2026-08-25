@@ -20,7 +20,11 @@
 
   <div class="field">
     <label for="file-input">Or import a file</label>
-    <input type="file" id="file-input" accept=".pdf,.docx,.txt">
+    <div class="file-input-row">
+      <input type="file" id="file-input" accept=".pdf,.docx,.txt">
+      <button type="button" class="btn ghost" id="clear-file-btn" style="display:none;">✕ Remove file</button>
+    </div>
+    <div class="hint" id="file-name-hint"></div>
   </div>
 
   <div class="field">

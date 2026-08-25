@@ -2,6 +2,8 @@
   const notesInput   = document.getElementById("notes-input");
   const titleInput   = document.getElementById("title-input");
   const fileInput    = document.getElementById("file-input");
+  const clearFileBtn = document.getElementById("clear-file-btn");
+  const fileNameHint = document.getElementById("file-name-hint");
   const lengthSelect = document.getElementById("length-select");
   const qcountSelect = document.getElementById("qcount-select");
   const wordCountEl  = document.getElementById("word-count");
@@ -41,10 +43,18 @@
     wordCountEl.textContent = `${words} word${words === 1 ? "" : "s"}`;
   });
 
+  function resetFileInput() {
+    fileInput.value = "";
+    fileNameHint.textContent = "";
+    clearFileBtn.style.display = "none";
+  }
+
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files[0];
     if (!file) return;
     setStatus(notesStatus, notesStatusText, "busy", "Reading file…");
+    fileNameHint.textContent = file.name;
+    clearFileBtn.style.display = "inline-flex";
     const form = new FormData();
     form.append("file", file);
     try {
@@ -58,7 +68,16 @@
     } catch (e) {
       setStatus(notesStatus, notesStatusText, "error", "Import failed");
       showError(e.message);
+      resetFileInput();
     }
+  });
+
+  clearFileBtn.addEventListener("click", () => {
+    resetFileInput();
+    notesInput.value = "";
+    notesInput.dispatchEvent(new Event("input"));
+    clearError();
+    setStatus(notesStatus, notesStatusText, "ok", "Ready");
   });
 
   summarizeBtn.addEventListener("click", async () => {

@@ -4,22 +4,44 @@
 {% block content %}
 <section class="panel">
   <h1>Chat History</h1>
-  <p class="lede">Every conversation with the tutor, grouped by day.</p>
+  <p class="lede">Every conversation with the tutor. Click one to reopen and keep talking right where you left off.</p>
 
-  {% if ordered_dates %}
-    {% for date in ordered_dates %}
-      <div class="history-date">{{ date }}</div>
-      <div class="chat-log" style="max-height:none;">
-        {% for m in sessions[date] %}
-          <div class="bubble {{ 'user' if m.role == 'You' else 'ai' }}">
-            {% if m.role != 'You' %}<span class="role">{{ m.role }} · {{ m.timestamp }}</span>{% endif %}
-            {{ m.message }}
-          </div>
-        {% endfor %}
-      </div>
-    {% endfor %}
+  {% if conversations %}
+    <div class="convo-list">
+      {% for c in conversations %}
+        <div class="convo-row">
+          <a class="convo-link" href="{{ url_for('chat_page') }}?conversation_id={{ c.id }}">
+            <div class="convo-title">{{ c.title }}</div>
+            <div class="convo-preview">{{ c.preview or "No messages yet" }}</div>
+            <div class="convo-meta">{{ c.updated_at.strftime('%d %b %Y, %H:%M') }} · {{ c.message_count }} message{{ '' if c.message_count == 1 else 's' }}</div>
+          </a>
+          <button class="btn ghost convo-delete-btn" data-id="{{ c.id }}" title="Delete conversation">✕</button>
+        </div>
+      {% endfor %}
+    </div>
   {% else %}
     <div class="empty-state">No chat history yet — start a conversation on the Tutor page.</div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll(".convo-delete-btn").forEach(btn => {
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Delete this conversation? This can't be undone.")) return;
+    const id = btn.dataset.id;
+    try {
+      const res = await fetch(`/api/conversations/${id}/delete`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Delete failed.");
+      btn.closest(".convo-row").remove();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+});
+</script>
 {% endblock %}
