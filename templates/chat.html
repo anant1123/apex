@@ -11,6 +11,13 @@
     <button class="btn ghost" id="new-chat-btn">+ New chat</button>
   </div>
 
+  <div class="note-attach-row" id="note-attach-row">
+    <span id="note-badge" class="note-badge" style="display:none;">📎 Discussing: <strong id="note-badge-title"></strong></span>
+    <select id="note-select">
+      <option value="">Attach a saved note (optional)…</option>
+    </select>
+  </div>
+
   <div class="chat-log" id="chat-log">
     <div class="empty-state" id="chat-empty">No messages yet — say hello.</div>
   </div>
@@ -27,6 +34,9 @@
 {% endblock %}
 
 {% block scripts %}
-<script>window.__INITIAL_CONVERSATION_ID__ = {{ (conversation_id or "")|tojson }};</script>
+<script>
+  window.__INITIAL_CONVERSATION_ID__ = {{ (conversation_id or "")|tojson }};
+  window.__INITIAL_NOTE_ID__ = {{ (note_id or "")|tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
 {% endblock %}

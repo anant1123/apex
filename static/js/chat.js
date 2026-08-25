@@ -7,8 +7,13 @@
   const statusEl = document.getElementById("chat-status");
   const statusText = document.getElementById("chat-status-text");
   const errorBox = document.getElementById("chat-error");
+  const noteSelect = document.getElementById("note-select");
+  const noteBadge = document.getElementById("note-badge");
+  const noteBadgeTitle = document.getElementById("note-badge-title");
 
   let conversationId = window.__INITIAL_CONVERSATION_ID__ || null;
+  let attachedNoteId = window.__INITIAL_NOTE_ID__ || null;
+  let notesList = [];
 
   function setStatus(state, text) {
     statusEl.className = `status ${state}`;
@@ -46,6 +51,46 @@
     window.history.replaceState({}, "", url);
   }
 
+  // ── Note attachment (RAG) ────────────────────────────────────────────
+
+  function noteTitleById(id) {
+    const n = notesList.find(n => n.id === id);
+    return n ? n.title : "your note";
+  }
+
+  function showNoteBadge(noteId) {
+    noteBadgeTitle.textContent = noteTitleById(noteId);
+    noteBadge.style.display = "inline-flex";
+    noteSelect.style.display = "none";
+  }
+
+  function showNotePicker() {
+    noteBadge.style.display = "none";
+    noteSelect.style.display = "inline-block";
+    noteSelect.value = "";
+  }
+
+  async function loadNotesList() {
+    try {
+      const res = await fetch("/api/notes/list");
+      const data = await res.json();
+      if (!res.ok) return;
+      notesList = data.notes || [];
+      noteSelect.innerHTML = `<option value="">Attach a saved note (optional)…</option>` +
+        notesList.map(n => `<option value="${n.id}">${escapeHtml(n.title)}</option>`).join("");
+      if (attachedNoteId) {
+        if (conversationId) showNoteBadge(attachedNoteId);
+        else { noteSelect.value = attachedNoteId; }
+      }
+    } catch (e) { /* non-critical — the picker just stays empty */ }
+  }
+
+  noteSelect.addEventListener("change", () => {
+    attachedNoteId = noteSelect.value || null;
+  });
+
+  // ── Conversation loading ─────────────────────────────────────────────
+
   async function loadConversation(id) {
     setStatus("busy", "Loading conversation…");
     try {
@@ -57,6 +102,9 @@
         addBubble(m.role === "user" ? "user" : "ai", m.content);
       }
       conversationId = data.conversation_id;
+      attachedNoteId = data.note_id || null;
+      if (attachedNoteId) showNoteBadge(attachedNoteId);
+      else showNotePicker();
       setStatus("ok", "Ready");
     } catch (e) {
       setStatus("error", "Failed to load");
@@ -64,9 +112,10 @@
     }
   }
 
-  if (conversationId) {
-    loadConversation(conversationId);
-  }
+  loadNotesList().then(() => {
+    if (conversationId) loadConversation(conversationId);
+    else if (attachedNoteId) showNoteBadge(attachedNoteId);
+  });
 
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -78,9 +127,11 @@
 
   newChatBtn.addEventListener("click", () => {
     conversationId = null;
+    attachedNoteId = null;
     clearLog();
     clearError();
     updateUrl();
+    showNotePicker();
     setStatus("ok", "New chat started");
     input.focus();
   });
@@ -101,7 +152,7 @@
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, conversation_id: conversationId }),
+        body: JSON.stringify({ message: text, conversation_id: conversationId, note_id: attachedNoteId }),
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
@@ -129,6 +180,7 @@
           if (payload.conversation_id && !conversationId) {
             conversationId = payload.conversation_id;
             updateUrl();
+            if (attachedNoteId) showNoteBadge(attachedNoteId);
           }
           if (payload.chunk) {
             aiTextEl.textContent += payload.chunk;
@@ -145,5 +197,11 @@
       sendBtn.disabled = false;
       input.focus();
     }
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
   }
 })();

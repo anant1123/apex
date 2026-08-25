@@ -3,10 +3,14 @@ app.py — A.P.E.X. Web (Flask entry point).
 
 Routes:
     /                 -> redirects to /notes (or /login if signed out)
-    /login, /register, /logout  -> auth
-    /profile          -> view/edit account, quick stats
+    /login            -> enter email, get a 6-digit code
+    /verify           -> enter the code, get logged in (creates the account
+                         on first success — no separate register step)
+    /logout           -> auth
+    /profile          -> view/edit account (name, avatar), quick stats
     /notes            -> Notes/Summarizer view      (paste/upload -> summary -> quiz)
-    /chat             -> AI Tutor view               (streaming chat, resumable conversations)
+    /chat             -> AI Tutor view               (streaming chat, resumable,
+                         optionally grounded in a saved note via ?note_id=)
     /progress         -> Progress Dashboard view      (stats, mastery, weak areas)
     /history          -> list of saved conversations, click one to resume it in /chat
 
@@ -14,6 +18,7 @@ Routes:
     POST /api/summarize         -> summarize text, save as a Note, return note_id + summary
     POST /api/quiz              -> generate an MCQ quiz from text (not persisted yet)
     POST /api/quiz/submit       -> persist a completed quiz attempt (Progress Dashboard data)
+    GET  /api/notes/list        -> {id, title} for every saved note (the Tutor's "attach a note" picker)
     POST /api/chat/stream       -> SSE stream of the tutor's reply, token by token
     POST /api/chat/new          -> start a fresh conversation, returns its id
     GET  /api/conversations/<id>        -> fetch a conversation's full message history (resume)
@@ -31,7 +36,7 @@ from datetime import timedelta
 from flask import Flask, render_template, request, jsonify, session, Response, redirect, url_for
 
 import config
-from services import document_import, summarizer, quiz_generator, chat_engine, auth
+from services import document_import, summarizer, quiz_generator, chat_engine, auth, email_sender
 from db import mongo
 
 app = Flask(__name__)
@@ -39,39 +44,7 @@ app.secret_key = config.SECRET_KEY
 app.permanent_session_lifetime = timedelta(days=config.SESSION_LIFETIME_DAYS)
 
 
-# ── Auth pages ───────────────────────────────────────────────────────────
-
-@app.route("/register", methods=["GET", "POST"])
-def register_page():
-    if session.get("user_id"):
-        return redirect(url_for("notes_page"))
-
-    if request.method == "GET":
-        return render_template("register.html")
-
-    name = (request.form.get("name") or "").strip()
-    email = (request.form.get("email") or "").strip()
-    password = request.form.get("password") or ""
-    confirm = request.form.get("confirm_password") or ""
-
-    if not name or not email or not password:
-        return render_template("register.html", error="Please fill in every field.", name=name, email=email)
-    if len(password) < 6:
-        return render_template("register.html", error="Password must be at least 6 characters.", name=name, email=email)
-    if password != confirm:
-        return render_template("register.html", error="Passwords don't match.", name=name, email=email)
-
-    try:
-        user_id = mongo.create_user(name, email, auth.hash_password(password))
-    except ValueError as e:
-        return render_template("register.html", error=str(e), name=name, email=email)
-    except Exception:
-        traceback.print_exc()
-        return render_template("register.html", error="Something went wrong — please try again.", name=name, email=email)
-
-    auth.log_in_user({"_id": user_id, "name": name})
-    return redirect(url_for("notes_page"))
-
+# ── Auth pages (passwordless — a 6-digit code emailed to you) ────────────
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
@@ -81,16 +54,66 @@ def login_page():
     if request.method == "GET":
         return render_template("login.html")
 
-    email = (request.form.get("email") or "").strip()
-    password = request.form.get("password") or ""
+    email = (request.form.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return render_template("login.html", error="Enter a valid email address.", email=email)
 
-    user = mongo.get_user_by_email(email)
-    if not user or not auth.verify_password(user["password_hash"], password):
-        return render_template("login.html", error="Incorrect email or password.", email=email)
+    code = auth.generate_otp_code()
+    mongo.create_otp(email, code, config.OTP_EXPIRY_MINUTES)
 
-    auth.log_in_user(user)
-    next_url = request.args.get("next")
-    return redirect(next_url if next_url and next_url.startswith("/") else url_for("notes_page"))
+    if not email_sender.send_otp_email(email, code):
+        return render_template(
+            "login.html", email=email,
+            error="Couldn't send the code right now — check the server's SMTP settings, or try again in a moment.",
+        )
+
+    session["pending_email"] = email
+    return redirect(url_for("verify_page", next=request.args.get("next", "")))
+
+
+# Old bookmarks / links to the previous password-based signup page just land on login now.
+@app.route("/register")
+def register_page():
+    return redirect(url_for("login_page"))
+
+
+@app.route("/verify", methods=["GET", "POST"])
+def verify_page():
+    email = session.get("pending_email")
+    if not email:
+        return redirect(url_for("login_page"))
+
+    if request.method == "GET":
+        return render_template("verify.html", email=email)
+
+    code = (request.form.get("code") or "").strip()
+    result = mongo.verify_and_consume_otp(email, code, config.OTP_MAX_ATTEMPTS)
+
+    if result == "ok":
+        user = mongo.get_or_create_user_by_email(email, default_name=email.split("@")[0].capitalize())
+        auth.log_in_user(user)
+        session.pop("pending_email", None)
+        next_url = request.form.get("next")
+        return redirect(next_url if next_url and next_url.startswith("/") else url_for("notes_page"))
+
+    error_messages = {
+        "wrong": "Incorrect code — check your inbox and try again.",
+        "expired": "That code expired — request a new one below.",
+        "too_many_attempts": "Too many incorrect attempts — request a new code below.",
+    }
+    return render_template("verify.html", email=email, error=error_messages.get(result, "Something went wrong."))
+
+
+@app.route("/verify/resend", methods=["POST"])
+def verify_resend():
+    email = session.get("pending_email")
+    if not email:
+        return redirect(url_for("login_page"))
+    code = auth.generate_otp_code()
+    mongo.create_otp(email, code, config.OTP_EXPIRY_MINUTES)
+    sent = email_sender.send_otp_email(email, code)
+    return render_template("verify.html", email=email, info=("New code sent." if sent else None),
+                            error=(None if sent else "Couldn't resend right now — try again shortly."))
 
 
 @app.route("/logout", methods=["POST", "GET"])
@@ -107,42 +130,19 @@ def profile_page():
     user = auth.current_user()
 
     if request.method == "POST":
-        action = request.form.get("action")
-
-        if action == "update_profile":
-            name = (request.form.get("name") or "").strip()
-            avatar_url = (request.form.get("avatar_url") or "").strip()
-            if name:
-                mongo.update_user_profile(user["_id"], name=name, avatar_url=avatar_url)
-                session["user_name"] = name
-                user = auth.current_user()
-                info = "Profile updated."
-            else:
-                info = None
-            try:
-                stats = mongo.get_user_stats(user["_id"])
-            except Exception:
-                stats = {"total_quizzes": 0, "avg_score_pct": 0, "total_notes": 0}
-            return render_template("profile.html", user=user, stats=stats, info=info)
-
-        if action == "change_password":
-            current_pw = request.form.get("current_password") or ""
-            new_pw = request.form.get("new_password") or ""
-            confirm_pw = request.form.get("confirm_new_password") or ""
-            try:
-                stats = mongo.get_user_stats(user["_id"])
-            except Exception:
-                stats = {"total_quizzes": 0, "avg_score_pct": 0, "total_notes": 0}
-
-            if not auth.verify_password(user["password_hash"], current_pw):
-                return render_template("profile.html", user=user, stats=stats, error="Current password is incorrect.")
-            if len(new_pw) < 6:
-                return render_template("profile.html", user=user, stats=stats, error="New password must be at least 6 characters.")
-            if new_pw != confirm_pw:
-                return render_template("profile.html", user=user, stats=stats, error="New passwords don't match.")
-
-            mongo.update_user_password(user["_id"], auth.hash_password(new_pw))
-            return render_template("profile.html", user=user, stats=stats, info="Password changed.")
+        name = (request.form.get("name") or "").strip()
+        avatar_url = (request.form.get("avatar_url") or "").strip()
+        info = None
+        if name:
+            mongo.update_user_profile(user["_id"], name=name, avatar_url=avatar_url)
+            session["user_name"] = name
+            user = auth.current_user()
+            info = "Profile updated."
+        try:
+            stats = mongo.get_user_stats(user["_id"])
+        except Exception:
+            stats = {"total_quizzes": 0, "avg_score_pct": 0, "total_notes": 0}
+        return render_template("profile.html", user=user, stats=stats, info=info)
 
     try:
         stats = mongo.get_user_stats(user["_id"])
@@ -170,7 +170,8 @@ def notes_page():
 @auth.login_required
 def chat_page():
     conversation_id = request.args.get("conversation_id", "")
-    return render_template("chat.html", active="chat", conversation_id=conversation_id)
+    note_id = request.args.get("note_id", "")
+    return render_template("chat.html", active="chat", conversation_id=conversation_id, note_id=note_id)
 
 
 @app.route("/progress")
@@ -293,7 +294,18 @@ def api_quiz_submit():
         return jsonify({"error": "Failed to save quiz attempt."}), 500
 
 
-# ── Chat API (streaming, per-conversation) ────────────────────────────────
+@app.route("/api/notes/list", methods=["GET"])
+@auth.login_required
+def api_notes_list():
+    user = auth.current_user()
+    try:
+        return jsonify({"notes": mongo.list_notes_brief(user["_id"])})
+    except Exception:
+        traceback.print_exc()
+        return jsonify({"error": "Couldn't load your notes."}), 500
+
+
+# ── Chat API (streaming, per-conversation, optionally note-grounded) ─────
 
 @app.route("/api/chat/stream", methods=["POST"])
 @auth.login_required
@@ -302,19 +314,25 @@ def api_chat_stream():
     data = request.get_json(force=True) or {}
     user_text = (data.get("message") or "").strip()
     conversation_id = data.get("conversation_id")
+    note_id = data.get("note_id")  # only used when starting a brand-new conversation
     if not user_text:
         return jsonify({"error": "Empty message."}), 400
 
     try:
-        if conversation_id:
-            convo = mongo.get_conversation(user["_id"], conversation_id)
-        else:
-            convo = None
+        convo = mongo.get_conversation(user["_id"], conversation_id) if conversation_id else None
 
         if not convo:
             title = user_text[:60] + ("…" if len(user_text) > 60 else "")
-            conversation_id = mongo.create_conversation(user["_id"], title=title)
-            convo = {"messages": []}
+            note_context = None
+            if note_id:
+                note = mongo.get_note(user["_id"], note_id)
+                if note:
+                    # Prefer the summary (shorter, cheaper on tokens); fall back to the
+                    # raw notes if no summary was ever generated for this note.
+                    note_context = note.get("summary_text") or note.get("original_text")
+                    title = f"About: {note.get('title', 'Note')}"
+            conversation_id = mongo.create_conversation(user["_id"], title=title, note_id=note_id, note_context=note_context)
+            convo = {"messages": [], "note_context": note_context}
 
         history = [{"role": m["role"], "content": m["content"]} for m in convo.get("messages", [])]
         history.append({"role": "user", "content": user_text})
@@ -323,11 +341,13 @@ def api_chat_stream():
         traceback.print_exc()
         return jsonify({"error": "Couldn't reach the database — please try again."}), 500
 
+    note_context = convo.get("note_context")
+
     def event_stream():
         full_reply = ""
         try:
             yield f"data: {json.dumps({'conversation_id': conversation_id})}\n\n"
-            for chunk_text in chat_engine.stream_reply(history[-config.MAX_CHAT_HISTORY_TURNS:]):
+            for chunk_text in chat_engine.stream_reply(history[-config.MAX_CHAT_HISTORY_TURNS:], note_context=note_context):
                 full_reply += chunk_text
                 yield f"data: {json.dumps({'chunk': chunk_text})}\n\n"
         except Exception as e:
@@ -371,7 +391,12 @@ def api_conversation_get(conversation_id):
         {"role": m["role"], "content": m["content"]}
         for m in convo.get("messages", [])
     ]
-    return jsonify({"conversation_id": convo["_id"], "title": convo.get("title", "New chat"), "messages": messages})
+    return jsonify({
+        "conversation_id": convo["_id"],
+        "title": convo.get("title", "New chat"),
+        "messages": messages,
+        "note_id": convo.get("note_id"),
+    })
 
 
 @app.route("/api/conversations/<conversation_id>/delete", methods=["POST"])

@@ -2,21 +2,22 @@
 db/mongo.py — MongoDB data layer for A.P.E.X. Web.
 
 Collections:
-  users          { name, email, password_hash, avatar_url, created_at }
+  users          { name, email, avatar_url, created_at }
+  otp_codes      { email, code, expires_at, attempts }  (TTL-indexed — auto-deletes on expiry)
   notes          { user_id, title, original_text, summary_text, created_at }
   quiz_attempts  { user_id, note_id, note_title, score, total, timestamp,
                    questions: [ {question, correct_answer, user_answer, is_correct} ] }
-  conversations  { user_id, title, created_at, updated_at,
+  conversations  { user_id, title, note_id, note_context, created_at, updated_at,
                    messages: [ {role, content, timestamp} ] }
 
 Everything except user creation is scoped to a `user_id` (ObjectId) so
 one person's notes/quizzes/chats never show up for another person.
-Old pre-login documents (no user_id) are left untouched in the database —
-they just won't show up for anyone, since every query below filters by
-user_id.
+Login is passwordless: a 6-digit code is emailed to the user (see
+services/email_sender.py) and verified against `otp_codes`; the first
+successful verification for a new email auto-creates the user record.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from bson.errors import InvalidId
 from pymongo import MongoClient, DESCENDING
@@ -30,10 +31,12 @@ _db = None
 
 def get_db():
     """Lazy singleton — one MongoClient per process (safe for Flask's threaded dev server
-    and for gunicorn workers, since each worker process gets its own client on first use)."""
+    and for gunicorn workers, since each worker process gets its own client on first use).
+    tz_aware=True so datetimes read back from Mongo are UTC-aware, matching _now() below —
+    otherwise comparing them (e.g. OTP expiry) raises a naive-vs-aware TypeError."""
     global _client, _db
     if _db is None:
-        _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=8000)
+        _client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=8000, tz_aware=True)
         _db = _client[MONGO_DB_NAME]
         _ensure_indexes(_db)
     return _db
@@ -41,6 +44,8 @@ def get_db():
 
 def _ensure_indexes(db):
     db.users.create_index("email", unique=True)
+    db.otp_codes.create_index("email")
+    db.otp_codes.create_index("expires_at", expireAfterSeconds=0)  # Mongo TTL auto-cleanup
     db.notes.create_index([("user_id", 1), ("created_at", DESCENDING)])
     db.quiz_attempts.create_index([("user_id", 1), ("timestamp", DESCENDING)])
     db.quiz_attempts.create_index("note_id")
@@ -63,21 +68,31 @@ def _oid(id_str):
 
 # ── Users / Auth ──────────────────────────────────────────────────────────
 
-def create_user(name, email, password_hash, avatar_url=""):
-    """Raises ValueError if the email is already registered."""
+def get_or_create_user_by_email(email, default_name):
+    """Used by the OTP login flow: returns the existing user, or creates one
+    on the first successful verification for a brand-new email."""
     db = get_db()
-    doc = {
-        "name": name.strip(),
-        "email": email.strip().lower(),
-        "password_hash": password_hash,
-        "avatar_url": avatar_url,
+    email = email.strip().lower()
+    doc = db.users.find_one({"email": email})
+    if doc:
+        doc["_id"] = str(doc["_id"])
+        return doc
+
+    new_doc = {
+        "name": default_name.strip() or email.split("@")[0].capitalize(),
+        "email": email,
+        "avatar_url": "",
         "created_at": _now(),
     }
     try:
-        result = db.users.insert_one(doc)
+        result = db.users.insert_one(new_doc)
     except DuplicateKeyError:
-        raise ValueError("An account with that email already exists.")
-    return str(result.inserted_id)
+        # Race: two verifications for the same brand-new email at once — just re-read.
+        doc = db.users.find_one({"email": email})
+        doc["_id"] = str(doc["_id"])
+        return doc
+    new_doc["_id"] = str(result.inserted_id)
+    return new_doc
 
 
 def get_user_by_email(email):
@@ -115,13 +130,38 @@ def update_user_profile(user_id, name=None, avatar_url=None):
     return True
 
 
-def update_user_password(user_id, new_password_hash):
+# ── OTP login codes ───────────────────────────────────────────────────────
+
+def create_otp(email, code, expiry_minutes):
+    """Overwrites any previous code for this email (upsert) and resets attempts.
+    The `expires_at` TTL index (see _ensure_indexes) cleans these up automatically."""
     db = get_db()
-    oid = _oid(user_id)
-    if not oid:
-        return False
-    db.users.update_one({"_id": oid}, {"$set": {"password_hash": new_password_hash}})
-    return True
+    email = email.strip().lower()
+    expires_at = _now() + timedelta(minutes=expiry_minutes)
+    db.otp_codes.update_one(
+        {"email": email},
+        {"$set": {"code": code, "expires_at": expires_at, "attempts": 0}},
+        upsert=True,
+    )
+
+
+def verify_and_consume_otp(email, code, max_attempts):
+    """Returns 'ok', 'wrong', 'expired', or 'too_many_attempts'.
+    On 'ok', the code is deleted so it can't be reused (single-use)."""
+    db = get_db()
+    email = email.strip().lower()
+    doc = db.otp_codes.find_one({"email": email})
+
+    if not doc or doc["expires_at"] < _now():
+        return "expired"
+    if doc.get("attempts", 0) >= max_attempts:
+        return "too_many_attempts"
+    if doc["code"] != code.strip():
+        db.otp_codes.update_one({"email": email}, {"$inc": {"attempts": 1}})
+        return "wrong"
+
+    db.otp_codes.delete_one({"email": email})
+    return "ok"
 
 
 def get_user_stats(user_id):
@@ -161,14 +201,30 @@ def get_note(user_id, note_id):
     return doc
 
 
+def list_notes_brief(user_id):
+    """Just id/title/created_at, for the "attach a note" picker in the Tutor UI
+    (fetching a small list is cheap; full note bodies stay lazy-loaded on demand)."""
+    db = get_db()
+    cursor = db.notes.find(
+        {"user_id": _oid(user_id)}, {"title": 1, "created_at": 1}
+    ).sort("created_at", DESCENDING).limit(50)
+    return [{"id": str(n["_id"]), "title": n.get("title") or "Untitled Note"} for n in cursor]
+
+
 # ── Conversations (chat sessions, resumable) ─────────────────────────────
 
-def create_conversation(user_id, title="New chat"):
+def create_conversation(user_id, title="New chat", note_id=None, note_context=None):
+    """note_id/note_context (optional): when the user starts a chat from a saved
+    note ("Discuss this in Tutor"), that note's text is attached here once, at
+    creation time, and reused for every message in the conversation — see
+    services/chat_engine.py."""
     db = get_db()
     now = _now()
     doc = {
         "user_id": _oid(user_id),
         "title": title[:80] or "New chat",
+        "note_id": _oid(note_id) if note_id else None,
+        "note_context": note_context or None,
         "created_at": now,
         "updated_at": now,
         "messages": [],
@@ -204,6 +260,8 @@ def get_conversation(user_id, conversation_id):
     doc = db.conversations.find_one({"_id": oid, "user_id": _oid(user_id)})
     if doc:
         doc["_id"] = str(doc["_id"])
+        if doc.get("note_id"):
+            doc["note_id"] = str(doc["note_id"])
     return doc
 
 

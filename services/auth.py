@@ -1,25 +1,21 @@
 """
-services/auth.py — Password hashing + login-session helpers.
+services/auth.py — Passwordless (email OTP) login-session helpers.
 
-Uses werkzeug's password hashing (already a Flask dependency, no new
-package needed) and Flask's signed session cookie to track who's
-logged in — no extra library like flask-login required, keeping the
-dependency footprint the same as the rest of this project.
+No password hashing here anymore — see services/email_sender.py and
+db/mongo.py's otp_codes functions for the actual OTP generate/verify flow.
+This module just tracks who's logged in via Flask's signed session cookie.
 """
 
+import random
 from functools import wraps
 from flask import session, redirect, url_for, request, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import mongo
 
 
-def hash_password(password):
-    return generate_password_hash(password)
-
-
-def verify_password(password_hash, password):
-    return check_password_hash(password_hash, password)
+def generate_otp_code():
+    """6-digit numeric code, e.g. '042817'."""
+    return f"{random.randint(0, 999999):06d}"
 
 
 def log_in_user(user):

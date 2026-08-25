@@ -41,5 +41,19 @@ SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "dev-only-change-me-in-productio
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "10"))
 SESSION_LIFETIME_DAYS = int(os.environ.get("SESSION_LIFETIME_DAYS", "30"))
 
+# --- Email OTP login (SMTP) ---
+# Gmail: use smtp.gmail.com:587 with a 16-character App Password (not your
+# normal password) — needs 2-Step Verification turned on first, then
+# generate one at myaccount.google.com/apppasswords. Any other SMTP
+# provider (Brevo, Resend's SMTP endpoint, your college's mail server) works
+# the same way, just change these four values.
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM_NAME = os.environ.get("SMTP_FROM_NAME", "A.P.E.X.")
+OTP_EXPIRY_MINUTES = int(os.environ.get("OTP_EXPIRY_MINUTES", "10"))
+OTP_MAX_ATTEMPTS = int(os.environ.get("OTP_MAX_ATTEMPTS", "5"))
+
 # --- App behaviour ---
 MAX_CHAT_HISTORY_TURNS = 12   # how many past turns are sent back to Groq for context

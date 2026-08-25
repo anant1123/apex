@@ -24,6 +24,12 @@ except OSError:
     print("[quiz_generator] en_core_web_md not found — falling back to a blank "
           "pipeline. Run: python -m spacy download en_core_web_md")
     nlp = spacy.blank("en")
+    # A bare spacy.blank() pipeline has no components at all — no tagger, no
+    # NER, and critically no sentence boundaries, so `doc.sents` below would
+    # raise instead of just returning worse-quality questions. Adding a
+    # sentencizer keeps the app answering (with a clear 400 message if no
+    # sentence passes the quality filter) instead of a hard 500 crash.
+    nlp.add_pipe("sentencizer")
 
 # --- Filler / stop words — never used as an answer ---
 _SKIP_WORDS = {

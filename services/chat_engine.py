@@ -112,18 +112,38 @@ def _maybe_run_tool_call(messages):
     return messages, True
 
 
-def stream_reply(message_history):
+def stream_reply(message_history, note_context=None):
     """
     message_history: list of {"role": "user"|"assistant", "content": str},
     WITHOUT the system prompt (that's added here).
+
+    note_context: optional text (a saved note's summary or original text) the
+    student is currently "discussing" — see app.py's /api/chat/stream, which
+    attaches this once when a conversation is created via "Discuss this note
+    in Tutor" or the chat page's note picker. When present, it's injected as
+    a second system message so the tutor can answer questions grounded in
+    that specific material instead of only its general knowledge.
 
     Yields text chunks as they stream in from Groq — the Flask route
     wraps this generator in a Server-Sent-Events response so the browser
     gets the same typewriter effect the desktop app had.
     """
     client = _get_client()
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + message_history
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
+    if note_context:
+        messages.append({
+            "role": "system",
+            "content": (
+                "The student is currently studying the notes below. When they ask a "
+                "question, check whether it's about this material first and answer "
+                "grounded in it — quote or paraphrase the relevant part rather than "
+                "guessing. They may also ask unrelated questions; answer those normally."
+                "\n\n--- STUDENT'S NOTES ---\n" + note_context
+            ),
+        })
+
+    messages += message_history
     messages, _used_search = _maybe_run_tool_call(messages)
 
     stream = client.chat.completions.create(

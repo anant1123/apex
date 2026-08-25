@@ -3,25 +3,21 @@
 
 {% block content %}
 <section class="panel auth-panel">
-  <h1>Welcome back</h1>
-  <p class="lede">Log in to reach your notes, tutor conversations, and progress.</p>
+  <h1>Welcome to A.P.E.X.</h1>
+  <p class="lede">Enter your email and we'll send you a 6-digit code — no password needed.</p>
 
   {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
 
   <form method="post" autocomplete="on">
     <div class="field">
       <label for="email">Email</label>
-      <input type="email" id="email" name="email" required value="{{ email or '' }}" autofocus>
-    </div>
-    <div class="field">
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" required>
+      <input type="email" id="email" name="email" required value="{{ email or '' }}" autofocus placeholder="you@college.edu">
     </div>
     <div class="btn-row">
-      <button type="submit" class="btn primary">Log in</button>
+      <button type="submit" class="btn primary">Send code</button>
     </div>
   </form>
 
-  <p class="hint auth-switch">New here? <a href="{{ url_for('register_page') }}">Create an account</a></p>
+  <p class="hint auth-switch">New here? Just enter your email — your account is created automatically on your first login.</p>
 </section>
 {% endblock %}

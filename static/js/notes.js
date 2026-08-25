@@ -23,6 +23,7 @@
   const quizCards  = document.getElementById("quiz-cards");
   const submitQuizBtn = document.getElementById("submit-quiz-btn");
   const quizResult = document.getElementById("quiz-result");
+  const discussBtn = document.getElementById("discuss-btn");
 
   let currentNoteId = null;
   let currentSummary = "";
@@ -113,6 +114,11 @@
     } finally {
       summarizeBtn.disabled = false;
     }
+  });
+
+  discussBtn.addEventListener("click", () => {
+    if (!currentNoteId) { showError("Summarize your notes first."); return; }
+    window.location.href = `/chat?note_id=${currentNoteId}`;
   });
 
   quizBtn.addEventListener("click", async () => {
